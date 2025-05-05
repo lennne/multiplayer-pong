@@ -1,7 +1,7 @@
 // Canvas Related 
 const canvas = document.createElement('canvas');
 const context = canvas.getContext('2d');
-const socket = io('/pong');
+const socket = io('http://localhost:3000');
 let isReferee = false;
 let paddleIndex = 0;
 
@@ -12,6 +12,8 @@ let height = 700;
 let paddleHeight = 10;
 let paddleWidth = 50;
 let paddleDiff = 25;
+//paddle position of both players
+//index 0 for player at the bottom and index 1 for the top player
 let paddleX = [ 225, 225 ];
 let trajectoryX = [ 0, 0 ];
 let playerMoved = false;
@@ -25,6 +27,7 @@ let ballDirection = 1;
 // Speed
 let speedY = 2;
 let speedX = 0;
+// let computerSpeed = 4;
 
 // Score for Both Players
 let score = [ 0, 0 ];
@@ -90,11 +93,12 @@ function ballReset() {
   ballX = width / 2;
   ballY = height / 2;
   speedY = 3;
+  
   socket.emit('ballMove', {
     ballX,
     ballY,
-    score,
-  });
+    score
+  })
 }
 
 // Adjust Ball Movement
@@ -105,11 +109,13 @@ function ballMove() {
   if (playerMoved) {
     ballX += speedX;
   }
+
+  //when emmiting an event you pass in data unless you want to execute some function
   socket.emit('ballMove', {
     ballX,
     ballY,
-    score,
-  });
+    score
+  })
 }
 
 // Determine What Ball Bounces Off, Score Points, Reset Ball
@@ -157,31 +163,54 @@ function ballBoundaries() {
       trajectoryX[1] = ballX - (paddleX[1] + paddleDiff);
       speedX = trajectoryX[1] * 0.3;
     } else {
+      // Reset Ball, Increase Computer Difficulty, add to Player Score
+      // if (computerSpeed < 6) {
+      //   computerSpeed += 0.5;
+      // }
       ballReset();
       score[0]++;
     }
   }
 }
 
+// Computer Movement
+// function computerAI() {
+//   if (playerMoved) {
+//     if (paddleX[1] + paddleDiff < ballX) {
+//       paddleX[1] += computerSpeed;
+//     } else {
+//       paddleX[1] -= computerSpeed;
+//     }
+//     if (paddleX[1] < 0) {
+//       paddleX[1] = 0;
+//     } else if (paddleX[1] > (width - paddleWidth)) {
+//       paddleX[1] = width - paddleWidth;
+//     }
+//   }
+// }
+
 // Called Every Frame
 function animate() {
-  if (isReferee) {
+  // computerAI();
+  if(isReferee){
     ballMove();
     ballBoundaries();
+
   }
   renderCanvas();
   window.requestAnimationFrame(animate);
 }
 
-// Load Game, Reset Everything
+// Start Game, Reset Everything
 function loadGame() {
   createCanvas();
   renderIntro();
   socket.emit('ready');
 }
 
-function startGame() {
-  paddleIndex = isReferee ? 0 : 1;
+function startGame(){
+  //deciding who controls the bottom paddle
+  paddleIndex = isReferee ? 0 : 1 ;
   window.requestAnimationFrame(animate);
   canvas.addEventListener('mousemove', (e) => {
     playerMoved = true;
@@ -192,9 +221,11 @@ function startGame() {
     if (paddleX[paddleIndex] > (width - paddleWidth)) {
       paddleX[paddleIndex] = width - paddleWidth;
     }
+
+    //we emit this event(basically we send this event to the server)
     socket.emit('paddleMove', {
-      xPosition: paddleX[paddleIndex],
-    });
+      xPosition: paddleX[paddleIndex]
+    })
     // Hide Cursor
     canvas.style.cursor = 'none';
   });
@@ -204,22 +235,25 @@ function startGame() {
 loadGame();
 
 socket.on('connect', () => {
-  console.log('Connected as...', socket.id);
-});
+  console.log('connected as ....', socket.id);
+})
 
+//this is the event that gets executed when a startGame event occurs
 socket.on('startGame', (refereeId) => {
   console.log('Referee is', refereeId);
 
+  //if a certain condition is met then isReferee is true
   isReferee = socket.id === refereeId;
   startGame();
-});
+})
 
-socket.on('paddleMove', (paddleData) => {
-  // Toggle 1 into 0, and 0 into 1
+socket.on('paddleMove', (paddleData)=>{
+  //identifying the opponentPaddleIndex
+  //toggle 1 into 0 and 0 into 1
   const opponentPaddleIndex = 1 - paddleIndex;
   paddleX[opponentPaddleIndex] = paddleData.xPosition;
 });
 
 socket.on('ballMove', (ballData) => {
   ({ ballX, ballY, score } = ballData);
-});
+})
